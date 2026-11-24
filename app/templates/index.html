@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }}</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22 width=%2232%22 height=%2232%22><text y=%2226%22 font-size=%2224%22>🛡️</text></svg>">
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+
+  <!-- Top Announcement Bar -->
+  <div class="bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 border-b border-cyan-800/40 px-4 py-2 text-xs flex justify-between items-center">
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+        WINTER SMOG ALERT SYSTEM
+      </span>
+      <span class="text-slate-300 hidden sm:inline">Diurnal Temperature Inversion Defense & Community Clean-Air Protocol</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="openApiKeyModal()" class="text-slate-400 hover:text-cyan-400 transition flex items-center gap-1 text-xs">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+        <span id="api-status-label">Gemini API: Auto/Offline</span>
+      </button>
+      <span class="text-slate-600">|</span>
+      <span class="text-slate-400">v{{ version }}</span>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-4 py-3 sm:px-8">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+      <!-- Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-xl shadow-lg shadow-cyan-500/20">
+          🛡️
+        </div>
+        <div>
+          <h1 class="text-xl font-bold bg-gradient-to-r from-cyan-400 via-teal-300 to-indigo-400 bg-clip-text text-transparent flex items-center gap-2">
+            AuraShield AI
+            <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-900/60 text-cyan-300 border border-cyan-700/50">GenAI Smog Defense</span>
+          </h1>
+          <p class="text-xs text-slate-400">Urban Winter Smog Navigator & Low-Emission Daily Routine Planner</p>
+        </div>
+      </div>
+
+      <!-- Quick Location & Live Status Widget -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5">
+          <span class="text-slate-400 text-xs font-medium">City:</span>
+          <select id="city-selector" onchange="changeCity(this.value)" class="bg-transparent text-xs font-semibold text-cyan-300 focus:outline-none cursor-pointer">
+            {% for key, city in hotspot_cities.items() %}
+              <option value="{{ key }}" class="bg-slate-900 text-slate-200">{{ city.name }} (AQI ~{{ city.base_aqi }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Live AQI Pill -->
+        <div id="live-aqi-pill" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-rose-950/80 text-rose-300 border-rose-800 animate-pulse text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+          <span>AQI <strong id="live-aqi-val">--</strong></span>
+          <span class="text-slate-400">|</span>
+          <span id="live-aqi-level">Loading...</span>
+        </div>
+
+        <button onclick="refreshSmogData()" title="Refresh live telemetry" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="max-w-7xl mx-auto flex gap-1 mt-3 overflow-x-auto pb-1 border-t border-slate-800/70 pt-2.5">
+      <button onclick="switchTab('radar')" id="tab-btn-radar" class="tab-btn active px-3.5 py-1.5 rounded-lg text-xs font-medium border border-transparent transition flex items-center gap-1.5 whitespace-nowrap">
+        <span>📡</span> Live Inversion Radar
+      </button>
+      <button onclick="switchTab('routine')" id="tab-btn-routine" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-medium border border-transparent transition flex items-center gap-1.5 whitespace-nowrap">
+        <span>📅</span> Daily Routine Planner
+      </button>
+      <button onclick="switchTab('iaq')" id="tab-btn-iaq" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-medium border border-transparent transition flex items-center gap-1.5 whitespace-nowrap">
+        <span>🛠️</span> Indoor Air Hacks & DIY Lab
+      </button>
+      <button onclick="switchTab('impact')" id="tab-btn-impact" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-medium border border-transparent transition flex items-center gap-1.5 whitespace-nowrap">
+        <span>📊</span> Impact & Health Simulator
+      </button>
+      <button onclick="switchTab('community')" id="tab-btn-community" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-medium border border-transparent transition flex items-center gap-1.5 whitespace-nowrap">
+        <span>🤝</span> Community Smog Watch
+      </button>
+      <button onclick="switchTab('copilot')" id="tab-btn-copilot" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-medium border border-transparent transition flex items-center gap-1.5 whitespace-nowrap">
+        <span>🤖</span> GenAI Smog Copilot
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-8 py-6 flex-1 w-full">
+
+    <!-- ==================== TAB 1: RADAR & INVERSION FORECAST ==================== -->
+    <section id="tab-radar" class="space-y-6">
+      <!-- Hero Warning Banner -->
+      <div id="smog-hero-card" class="glass-panel rounded-2xl p-6 relative overflow-hidden border-rose-700/60">
+        <div class="absolute -right-16 -top-16 w-64 h-64 bg-rose-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
+          <div class="lg:col-span-2 space-y-3">
+            <div class="flex items-center gap-2">
+              <span id="hero-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-950 text-rose-300 border border-rose-700">
+                CRITICAL INVERSION ALERT
+              </span>
+              <span id="hero-timestamp" class="text-xs text-slate-400">Updated just now</span>
+            </div>
+            <h2 id="hero-city-title" class="text-2xl sm:text-3xl font-extrabold text-white">
+              Delhi NCR, India
+            </h2>
+            <p id="hero-health-advice" class="text-slate-300 text-sm leading-relaxed">
+              Severe thermal inversion is trapping ground vehicular soot and regional biomass smoke below 85 meters. Outdoor exercise poses acute cardiopulmonary risks.
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div class="glass-panel-subtle p-3 rounded-xl">
+                <span class="text-xs text-slate-400 block">PM2.5 Level</span>
+                <span id="hero-pm25" class="text-xl font-bold text-rose-400">290.0</span>
+                <span class="text-[10px] text-slate-400"> µg/m³ (58× WHO)</span>
+              </div>
+              <div class="glass-panel-subtle p-3 rounded-xl">
+                <span class="text-xs text-slate-400 block">Inversion Height</span>
+                <span id="hero-inversion-m" class="text-xl font-bold text-cyan-400">80m</span>
+                <span class="text-[10px] text-slate-400"> Boundary ceiling</span>
+              </div>
+              <div class="glass-panel-subtle p-3 rounded-xl">
+                <span class="text-xs text-slate-400 block">24h Toxic Equiv.</span>
+                <span id="hero-cigarettes" class="text-xl font-bold text-amber-400">13.2</span>
+                <span class="text-[10px] text-slate-400"> Cigarettes/day</span>
+              </div>
+              <div class="glass-panel-subtle p-3 rounded-xl">
+                <span class="text-xs text-slate-400 block">Safest Window</span>
+                <span id="hero-safest-window" class="text-sm font-bold text-emerald-400 block pt-1">1:00 - 3:30 PM</span>
+                <span class="text-[10px] text-slate-400"> Solar mixing</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Action Card -->
+          <div class="glass-panel-subtle p-5 rounded-xl flex flex-col justify-between border-cyan-800/40">
+            <div>
+              <span class="text-xs uppercase tracking-wider text-cyan-400 font-bold block mb-1">Inversion Breakdown Clock</span>
+              <h3 class="text-base font-semibold text-slate-100">Solar Ventilation Countdown</h3>
+              <p class="text-xs text-slate-400 mt-1">
+                Solar radiation breaks the surface inversion between <strong>12:30 PM and 3:30 PM</strong>. Save outdoor errands and home aeration for this window!
+              </p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-700/60 flex flex-col gap-2">
+              <button onclick="switchTab('routine')" class="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-xs font-bold text-white transition shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-1.5">
+                <span>📅</span> View Family Hourly Routine
+              </button>
+              <button onclick="switchTab('iaq')" class="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition flex items-center justify-center gap-1.5">
+                <span>🛠️</span> Configure DIY Air Purifier
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diurnal 24-Hour Smog Inversion Curve Chart -->
+      <div class="glass-panel rounded-2xl p-6 space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+          <div>
+            <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+              <span>📈</span> 24-Hour Boundary Layer Inversion & PM2.5 Diurnal Forecast
+            </h3>
+            <p class="text-xs text-slate-400">Correlating ground particulate spikes with shallow nighttime temperature inversion vs solar vertical mixing.</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> PM2.5 (µg/m³)</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span> Inversion Ceiling (m)</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span> Safest Window</span>
+          </div>
+        </div>
+
+        <div class="w-full h-72 sm:h-80">
+          <canvas id="inversionChart"></canvas>
+        </div>
+
+        <!-- Atmospheric Science Callout -->
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex items-start gap-3 text-xs text-slate-300">
+          <span class="text-lg">💡</span>
+          <div>
+            <strong class="text-cyan-300 font-semibold">The Atmospheric Science:</strong> During clear winter nights, ground radiative cooling produces a thermal inversion where warmer air aloft acts as an airtight ceiling at ~60-120 meters. Tailpipe exhaust, cooking smoke, and dust are trapped near the ground. Midday solar heating triggers convection, expanding the mixing ceiling to 800+ meters and lowering ground pollution by up to 70%.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: DAILY ROUTINE PLANNER ==================== -->
+    <section id="tab-routine" class="hidden space-y-6">
+      <div class="glass-panel rounded-2xl p-6">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-slate-100 flex items-center gap-2">
+              <span>📅</span> Personalized Low-Emission Daily Routine Planner
+            </h2>
+            <p class="text-xs text-slate-400">Tailored to your family lifestyle, commute, heating source, and the hourly smog inversion cycle.</p>
+          </div>
+          <button onclick="window.print()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 transition flex items-center gap-1.5 self-start sm:self-auto">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+            Print Fridge Checklist
+          </button>
+        </div>
+
+        <!-- Configuration Controls -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-900/60 border border-slate-800 mb-6">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Family Lifestyle Profile</label>
+            <select id="routine-lifestyle" onchange="generateRoutine()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+              {% for key, prof in lifestyle_profiles.items() %}
+                <option value="{{ key }}" class="bg-slate-900">{{ prof.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Home Type</label>
+            <select id="routine-home-type" onchange="generateRoutine()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+              <option value="apartment" class="bg-slate-900">Apartment / High-rise Renter</option>
+              <option value="standalone_house" class="bg-slate-900">Standalone House / Villa</option>
+              <option value="suburban" class="bg-slate-900">Suburban / Semi-Urban Home</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Primary Heating Source</label>
+            <select id="routine-heating" onchange="generateRoutine()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+              <option value="heat_pump_electric" class="bg-slate-900">Inverter Heat Pump / Electric Radiant</option>
+              <option value="gas_boiler" class="bg-slate-900">Natural Gas Boiler / Furnace</option>
+              <option value="biomass_wood" class="bg-slate-900">Wood Stove / Fireplace (High Emission)</option>
+              <option value="diesel_generator" class="bg-slate-900">Diesel Generator Backup</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Commute Transit Mode</label>
+            <select id="routine-commute" onchange="generateRoutine()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+              <option value="transit" class="bg-slate-900">Electric Metro / Rail / Bus</option>
+              <option value="carpool" class="bg-slate-900">Shared Carpool Pod</option>
+              <option value="solo_car" class="bg-slate-900">Solo Personal Car (ICE)</option>
+              <option value="ev" class="bg-slate-900">Electric Vehicle (EV)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Vulnerability & Key Directives -->
+        <div id="routine-header-banner" class="p-4 rounded-xl bg-cyan-950/40 border border-cyan-800/40 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="routine-vulnerability-badge" class="px-2.5 py-0.5 rounded text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                High Vulnerability
+              </span>
+              <span id="routine-lifestyle-title" class="text-sm font-bold text-slate-100">Family with Toddlers</span>
+            </div>
+            <p id="routine-critical-rule" class="text-xs text-slate-300 mt-1">Loading tailored lifestyle advice...</p>
+          </div>
+          <button onclick="generateRoutine()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white transition">
+            Regenerate Routine
+          </button>
+        </div>
+
+        <!-- Hourly Timeline -->
+        <div class="space-y-4" id="routine-timeline-container">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <!-- Sustainable Alternatives Matrix -->
+        <div class="mt-8 pt-6 border-t border-slate-800">
+          <h3 class="text-base font-bold text-slate-100 mb-4 flex items-center gap-2">
+            <span>🌱</span> Sustainable Low-Emission Daily Alternatives & Direct Impact
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="sustainable-alternatives-container">
+            <!-- Populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: IAQ HACKS & DIY LAB ==================== -->
+    <section id="tab-iaq" class="hidden space-y-6">
+      <!-- Corsi-Rosenthal Box Interactive CAD / Calculator -->
+      <div class="glass-panel rounded-2xl p-6">
+        <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
+          <div>
+            <span class="px-2.5 py-0.5 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              OPEN-SOURCE HARDWARE LAB
+            </span>
+            <h2 class="text-xl font-bold text-slate-100 mt-1 flex items-center gap-2">
+              <span>🛠️</span> DIY Corsi-Rosenthal (C-R) Box Purifier Configurator
+            </h2>
+            <p class="text-xs text-slate-400">Build a 500+ CFM medical-grade air cleaner for ~$70 that outperforms $500 commercial HEPA units.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Controls Form -->
+          <div class="lg:col-span-5 space-y-3.5 bg-slate-900/70 p-5 rounded-xl border border-slate-800">
+            <h3 class="text-xs uppercase font-bold tracking-wider text-cyan-400">1. Configurator Parameters</h3>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Fan Size</label>
+              <select id="cr-fan-size" onchange="recalculateCRBox()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                <option value="20" selected>20-inch Standard Box Fan (Optimal)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Filter Configuration</label>
+              <select id="cr-filter-count" onchange="recalculateCRBox()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                <option value="4" selected>4-Filter MERV-13 Cube (Standard C-R Box)</option>
+                <option value="5">5-Filter Tower (Filter on bottom too with stand)</option>
+                <option value="1">1-Filter Taped to Back (Underpowered budget hack)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Filter Thickness</label>
+              <select id="cr-filter-thickness" onchange="recalculateCRBox()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                <option value="2" selected>2-inch Pleated MERV 13 (2.5× surface area, lower noise)</option>
+                <option value="1">1-inch Pleated MERV 13 (Standard budget)</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Room Area (sq ft)</label>
+                <input type="number" id="cr-room-sqft" value="350" min="100" max="2000" oninput="recalculateCRBox()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Fan Speed</label>
+                <select id="cr-fan-speed" onchange="recalculateCRBox()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                  <option value="low">Low (Silent)</option>
+                  <option value="medium" selected>Medium (Optimal)</option>
+                  <option value="high">High (Rapid Clean)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Shroud Reminder Callout -->
+            <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+              <span>⚠️</span>
+              <div>
+                <strong>Don't Forget the Cardboard Shroud!</strong> Taping a 14-inch circular cardboard cutout over the front corners stops vortex backflow and boosts clean airflow by <strong>20%</strong>.
+              </div>
+            </div>
+          </div>
+
+          <!-- Calculated Performance & Comparison -->
+          <div class="lg:col-span-7 space-y-4">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div class="glass-panel-subtle p-4 rounded-xl">
+                <span class="text-xs text-slate-400 block">Clean Air Rate (CADR)</span>
+                <span id="cr-cadr-val" class="text-2xl font-bold text-cyan-400">520.0</span>
+                <span class="text-xs text-slate-400"> CFM</span>
+              </div>
+              <div class="glass-panel-subtle p-4 rounded-xl">
+                <span class="text-xs text-slate-400 block">Air Changes / Hour</span>
+                <span id="cr-ach-val" class="text-2xl font-bold text-emerald-400">10.4</span>
+                <span id="cr-ach-rating" class="text-[10px] text-emerald-300 block font-semibold">Medical Grade</span>
+              </div>
+              <div class="glass-panel-subtle p-4 rounded-xl col-span-2 sm:col-span-1">
+                <span class="text-xs text-slate-400 block">90% Clean Time</span>
+                <span id="cr-time-val" class="text-2xl font-bold text-purple-400">13.2</span>
+                <span class="text-xs text-slate-400"> Minutes</span>
+              </div>
+            </div>
+
+            <!-- Cost Comparison Card -->
+            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-300 font-semibold">Cost Comparison vs Commercial HEPA</span>
+                <span class="text-emerald-400 font-bold" id="cr-savings-label">You save $439!</span>
+              </div>
+              <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden flex">
+                <div id="cr-cost-bar-diy" class="bg-cyan-500 h-full text-[10px] font-bold text-slate-950 flex items-center justify-center" style="width: 15%;">
+                  DIY $81
+                </div>
+                <div class="bg-rose-500/40 h-full text-[10px] text-rose-200 flex items-center justify-center flex-1">
+                  Commercial HEPA $520
+                </div>
+              </div>
+              <div class="flex justify-between text-[11px] text-slate-400 pt-1">
+                <span>DIY C-R Box Total: <strong id="cr-cost-diy" class="text-cyan-300">$81.00</strong></span>
+                <span>Comparable Commercial Units: <strong class="text-slate-300">$520.00</strong></span>
+              </div>
+            </div>
+
+            <!-- Step by Step Instructions Accordion -->
+            <div class="space-y-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Assembly Guide</span>
+              <ol id="cr-steps-list" class="space-y-1.5 text-xs text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                <!-- Populated by JS -->
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Curated IAQ Hacks Grid -->
+      <div class="glass-panel rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+          <span>🛡️</span> Science-Validated Indoor Air Quality Hacks
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="iaq-hacks-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Mask Filtration Hierarchy -->
+      <div class="glass-panel rounded-2xl p-6">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
+          <div>
+            <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+              <span>😷</span> Respiratory Protection Seal & Mask Efficacy Matrix
+            </h3>
+            <p class="text-xs text-slate-400">Why non-electrostatic cloth and surgical masks fail to protect against PM2.5 aerosols.</p>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900 text-slate-400 uppercase text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="py-2.5 px-3">Mask / Respirator Type</th>
+                <th class="py-2.5 px-3">PM2.5 Filtration</th>
+                <th class="py-2.5 px-3">Peripheral Seal</th>
+                <th class="py-2.5 px-3">Leakage Rate</th>
+                <th class="py-2.5 px-3">Clinical Verdict</th>
+              </tr>
+            </thead>
+            <tbody id="mask-table-body" class="divide-y divide-slate-800">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: IMPACT & HEALTH SIMULATOR ==================== -->
+    <section id="tab-impact" class="hidden space-y-6">
+      <div class="glass-panel rounded-2xl p-6">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-6">
+          <div>
+            <span class="px-2.5 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              DIRECT IMPACT QUANTIFIER
+            </span>
+            <h2 class="text-xl font-bold text-slate-100 mt-1 flex items-center gap-2">
+              <span>📊</span> Personal Health Dose & Community Emission Impact Simulator
+            </h2>
+            <p class="text-xs text-slate-400">See the exact micrograms of PM2.5 prevented from entering alveolar lung tissue and the emissions your household saves.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Simulator Controls -->
+          <div class="lg:col-span-5 space-y-4 bg-slate-900/70 p-5 rounded-xl border border-slate-800">
+            <h3 class="text-xs uppercase font-bold tracking-wider text-cyan-400">Simulation Variables</h3>
+            
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300 font-medium">Daily Outdoor Exposure Hours</span>
+                <span id="slider-outdoor-val" class="text-cyan-400 font-bold">2.0 hrs</span>
+              </div>
+              <input type="range" id="slider-outdoor" min="0" max="10" step="0.5" value="2.0" oninput="updateImpactSimulation()" class="w-full accent-cyan-500 cursor-pointer">
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Mask Type Worn Outdoors</label>
+              <select id="sim-mask" onchange="updateImpactSimulation()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                <option value="none">No Mask (0% filtration)</option>
+                <option value="cloth">Cloth Scarf / Bandana (20% filtration)</option>
+                <option value="surgical">Surgical Mask (40% filtration)</option>
+                <option value="kn95">KN95 / KF94 (88% filtration)</option>
+                <option value="n95" selected>N95 / FFP2 (96% filtration)</option>
+                <option value="p100">Elastomeric P100 (99.9% filtration)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Commute Choice</label>
+                <select id="sim-commute" onchange="updateImpactSimulation()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                  <option value="carpool" selected>Carpool Cluster</option>
+                  <option value="electric_metro">Electric Metro / Rail</option>
+                  <option value="bus_transit">Public Bus Transit</option>
+                  <option value="ev">Electric Car (EV)</option>
+                  <option value="solo_car">Solo Car (ICE baseline)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">1-Way Commute (km)</label>
+                <input type="number" id="sim-commute-km" value="15" min="1" max="100" oninput="updateImpactSimulation()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Indoor Air Filtration</label>
+              <select id="sim-indoor-filtration" onchange="updateImpactSimulation()" class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+                <option value="true" selected>C-R Box / HEPA Running (Indoor PM2.5 ~18 µg/m³)</option>
+                <option value="false">Unfiltered Leaky Home (Indoor PM2.5 ~70% outdoor)</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300 font-medium">Community Neighbor Multiplier</span>
+                <span id="slider-multiplier-val" class="text-emerald-400 font-bold">50 Households</span>
+              </div>
+              <input type="range" id="slider-multiplier" min="1" max="500" step="5" value="50" oninput="updateImpactSimulation()" class="w-full accent-emerald-500 cursor-pointer">
+              <span class="text-[11px] text-slate-400">See what happens when your neighborhood adopts your low-emission routine!</span>
+            </div>
+          </div>
+
+          <!-- Simulator Metrics Display -->
+          <div class="lg:col-span-7 space-y-4">
+            <!-- Personal Health Spared Metrics -->
+            <div class="p-5 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-950/60 border border-slate-800 space-y-4">
+              <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">1. Personal Health Dose Avoided</span>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div class="glass-panel-subtle p-3.5 rounded-xl">
+                  <span class="text-xs text-slate-400 block">PM2.5 Spared / Day</span>
+                  <span id="sim-pm25-daily" class="text-2xl font-bold text-cyan-300">3,420</span>
+                  <span class="text-[10px] text-slate-400"> µg from alveoli</span>
+                </div>
+                <div class="glass-panel-subtle p-3.5 rounded-xl">
+                  <span class="text-xs text-slate-400 block">Cigarettes Spared / Day</span>
+                  <span id="sim-cigs-daily" class="text-2xl font-bold text-amber-400">10.4</span>
+                  <span class="text-[10px] text-slate-400"> Berkeley Earth metric</span>
+                </div>
+                <div class="glass-panel-subtle p-3.5 rounded-xl col-span-2 sm:col-span-1">
+                  <span class="text-xs text-slate-400 block">Season Spared (90d)</span>
+                  <span id="sim-cigs-season" class="text-2xl font-bold text-rose-400">936</span>
+                  <span class="text-[10px] text-slate-400"> Cigarette equivalents!</span>
+                </div>
+              </div>
+
+              <!-- Health Risk Reduction Percentage -->
+              <div class="space-y-2 pt-2">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">Total Pulmonary Toxic Dose Reduction</span>
+                  <span id="sim-reduction-pct" class="text-emerald-400 font-bold">89.4%</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                  <div id="sim-reduction-bar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full rounded-full transition-all duration-300" style="width: 89%;"></div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2 text-center pt-1 text-xs">
+                <div class="p-2 rounded-lg bg-slate-800/60">
+                  <span class="text-[11px] text-slate-400 block">Bronchospasm Risk</span>
+                  <span id="sim-bronchial-pct" class="font-bold text-emerald-400">-85%</span>
+                </div>
+                <div class="p-2 rounded-lg bg-slate-800/60">
+                  <span class="text-[11px] text-slate-400 block">Pediatric ER Risk</span>
+                  <span id="sim-er-pct" class="font-bold text-emerald-400">-82%</span>
+                </div>
+                <div class="p-2 rounded-lg bg-slate-800/60">
+                  <span class="text-[11px] text-slate-400 block">Vascular Stress</span>
+                  <span id="sim-cardiac-pct" class="font-bold text-emerald-400">-70%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Community Ripple Metrics -->
+            <div class="p-5 rounded-xl bg-gradient-to-br from-slate-900 to-emerald-950/40 border border-emerald-800/40 space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">2. Neighborhood Community Ripple Effect</span>
+                <span id="sim-multiplier-pill" class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">50 Homes</span>
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <div class="glass-panel-subtle p-3 rounded-xl">
+                  <span class="text-[11px] text-slate-400 block">CO2 Spared / Season</span>
+                  <span id="sim-comm-co2" class="text-xl font-bold text-emerald-300">54.2</span>
+                  <span class="text-[10px] text-slate-400"> Tons</span>
+                </div>
+                <div class="glass-panel-subtle p-3 rounded-xl">
+                  <span class="text-[11px] text-slate-400 block">PM2.5 Kept from Air</span>
+                  <span id="sim-comm-pm25" class="text-xl font-bold text-cyan-300">92.4</span>
+                  <span class="text-[10px] text-slate-400"> Kilograms</span>
+                </div>
+                <div class="glass-panel-subtle p-3 rounded-xl">
+                  <span class="text-[11px] text-slate-400 block">Collective Cigs Spared</span>
+                  <span id="sim-comm-cigs" class="text-xl font-bold text-amber-300">46,800</span>
+                  <span class="text-[10px] text-slate-400"> Cigarette doses</span>
+                </div>
+              </div>
+              <p id="sim-comm-ambient-drop" class="text-xs text-emerald-300/90 font-medium">
+                Estimated ~2.3 µg/m³ drop in local curb-level ambient smog if 50 neighborhood families adopt this routine!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: COMMUNITY SMOG WATCH ==================== -->
+    <section id="tab-community" class="hidden space-y-6">
+      <div class="glass-panel rounded-2xl p-6">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+          <div>
+            <span class="px-2.5 py-0.5 rounded text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              HYPERLOCAL ACTION NETWORK
+            </span>
+            <h2 class="text-xl font-bold text-slate-100 mt-1 flex items-center gap-2">
+              <span>🤝</span> Community Smog Watch & Clean Air Mutual Aid
+            </h2>
+            <p class="text-xs text-slate-400">Join neighborhood carpool clusters, find filtered public air sanctuaries, and report illegal open burning.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openIncidentModal()" class="px-3.5 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-xs font-bold text-white transition flex items-center gap-1.5 shadow-lg shadow-rose-600/20">
+              <span>🚨</span> Report Smog Violation
+            </button>
+            <button onclick="openPledgeModal()" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-xs font-bold text-white transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/20">
+              <span>✍️</span> Make a Clean Air Pledge
+            </button>
+          </div>
+        </div>
+
+        <!-- Community Counters -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block">Total Active Pledges</span>
+            <span id="comm-total-pledges" class="text-2xl font-extrabold text-cyan-400">146</span>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block">CO2 Spared Collectively</span>
+            <span id="comm-total-co2" class="text-2xl font-extrabold text-emerald-400">4,350 kg</span>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block">Active Carpool Pods</span>
+            <span id="comm-active-pods" class="text-2xl font-extrabold text-purple-400">38</span>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block">Clean Air Sanctuaries</span>
+            <span class="text-2xl font-extrabold text-amber-400">3 Nearby</span>
+          </div>
+        </div>
+
+        <!-- Clean Air Sanctuaries List -->
+        <div class="space-y-3 mb-8">
+          <h3 class="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+            <span>🏛️</span> Public Clean Air Sanctuaries (High-Capacity Filtered Safe Zones)
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="sanctuaries-grid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Two Column: Pledges Ledger & Smog Violations -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Community Pledges -->
+          <div class="space-y-3">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center justify-between">
+              <span>🌱 Recent Community Pledges</span>
+              <button onclick="openPledgeModal()" class="text-xs font-semibold text-emerald-400 hover:underline">+ Add Yours</button>
+            </h3>
+            <div id="pledges-list" class="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Smog Violations & Incidents -->
+          <div class="space-y-3">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-rose-400 flex items-center justify-between">
+              <span>🚨 Open Burning & Violation Reports</span>
+              <button onclick="openIncidentModal()" class="text-xs font-semibold text-rose-400 hover:underline">+ File Report</button>
+            </h3>
+            <div id="incidents-list" class="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 6: GENAI SMOG COPILOT ==================== -->
+    <section id="tab-copilot" class="hidden space-y-6">
+      <div class="glass-panel rounded-2xl p-6">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                AURA COPILOT
+              </span>
+              <span class="text-xs text-slate-400">Powered by Gemini AI & AuraShield Cognitive Synthesis</span>
+            </div>
+            <h2 class="text-xl font-bold text-slate-100 mt-1 flex items-center gap-2">
+              <span>🤖</span> Interactive Urban Smog & Clean Air AI Assistant
+            </h2>
+          </div>
+
+          <!-- Persona Selector -->
+          <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-1">
+            <button onclick="selectPersona('dr_vayu')" id="btn-persona-dr_vayu" class="persona-btn active px-3 py-1 rounded-md text-xs font-semibold transition bg-cyan-600 text-white">
+              🩺 Dr. Vayu (Doctor)
+            </button>
+            <button onclick="selectPersona('engineer_bob')" id="btn-persona-engineer_bob" class="persona-btn px-3 py-1 rounded-md text-xs font-semibold transition text-slate-400 hover:text-white">
+              🛠️ Engineer Bob (DIY)
+            </button>
+            <button onclick="selectPersona('community_strategist')" id="btn-persona-community_strategist" class="persona-btn px-3 py-1 rounded-md text-xs font-semibold transition text-slate-400 hover:text-white">
+              🌱 Aura Strategist (Community)
+            </button>
+          </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="border border-slate-800 rounded-xl bg-slate-900/60 flex flex-col h-[520px]">
+          <!-- Chat Log -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <!-- Initial Greeting -->
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center text-sm shadow">
+                🩺
+              </div>
+              <div class="glass-panel-subtle rounded-2xl rounded-tl-none p-4 max-w-2xl text-xs space-y-2 text-slate-200 leading-relaxed border-slate-700">
+                <p class="font-semibold text-cyan-300">Hello! I am Dr. Vayu, your respiratory and smog defense specialist.</p>
+                <p>Severe winter smog creates complex threats: temperature inversions trap toxic fine particulate (PM2.5), causing acute inflammation in developing children's lungs and vascular stress in adults.</p>
+                <p>How can I help you today? You can ask me for a customized emergency smog routine, how to protect an asthmatic family member, or select one of the quick scenario prompts below!</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Scenario Chips -->
+          <div class="px-4 py-2 border-t border-slate-800/80 bg-slate-950/40 flex gap-2 overflow-x-auto text-[11px]">
+            <button onclick="sendQuickPrompt('How do I build a $35 Corsi-Rosenthal box step-by-step?')" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 whitespace-nowrap transition">
+              🛠️ Build $35 C-R Box
+            </button>
+            <button onclick="sendQuickPrompt('Create a 24h emergency smog protocol for a 2-year-old child')" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 whitespace-nowrap transition">
+              👶 Toddler Emergency Protocol
+            </button>
+            <button onclick="sendQuickPrompt('Why is morning 7am-10am inversion more dangerous than afternoon 2pm?')" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 whitespace-nowrap transition">
+              ☀️ Inversion Timing Science
+            </button>
+            <button onclick="sendQuickPrompt('How should I seal drafty apartment windows without losing my security deposit?')" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 whitespace-nowrap transition">
+              🚪 Apartment Draft Sealing
+            </button>
+            <button onclick="sendQuickPrompt('How to set up car AC to block toxic street canyon smog during highway commutes?')" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 whitespace-nowrap transition">
+              🚗 Car Cabin Smog Defense
+            </button>
+          </div>
+
+          <!-- Chat Input -->
+          <div class="p-3 border-t border-slate-800 flex items-center gap-2">
+            <input type="text" id="chat-input" placeholder="Ask about smog hacks, routines, masks, inversion windows..." onkeydown="handleChatKey(event)" class="flex-1 glass-input rounded-xl px-4 py-2.5 text-xs">
+            <button onclick="sendChatMessage()" id="chat-send-btn" class="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-bold text-xs text-white transition flex items-center gap-1.5 shadow-lg shadow-cyan-600/30">
+              <span>Send</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODALS ==================== -->
+  <!-- API Key Modal -->
+  <div id="modal-apikey" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl max-w-md w-full p-6 border-slate-700 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+          <span>🔑</span> Google Gemini API Configuration
+        </h3>
+        <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        AuraShield works 100% out-of-the-box using its built-in local cognitive synthesis engine. If you would like to connect your personal Google Gemini API key for live web reasoning, enter it below:
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Gemini API Key</label>
+        <input type="password" id="user-gemini-key" placeholder="AIzaSy..." class="w-full glass-input rounded-lg px-3 py-2 text-xs">
+        <span class="text-[10px] text-slate-400 mt-1 block">Your key stays locally in your browser session.</span>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveApiKey('')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300">Clear Key</button>
+        <button onclick="saveApiKey(document.getElementById('user-gemini-key').value)" class="px-4 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white">Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Make a Pledge Modal -->
+  <div id="modal-pledge" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl max-w-md w-full p-6 border-emerald-700/60 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+          <span>🌱</span> Make a Clean Air Community Pledge
+        </h3>
+        <button onclick="closePledgeModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Your Name / Family / Organization</label>
+          <input type="text" id="pledge-name" placeholder="e.g. The Patel Family or Block 4 Residents" class="w-full glass-input rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Neighborhood / City</label>
+          <input type="text" id="pledge-loc" placeholder="e.g. South Delhi, Sector 9" class="w-full glass-input rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Pledge Category</label>
+          <select id="pledge-type" class="w-full glass-input rounded-lg px-3 py-2">
+            <option value="School Carpool Cluster">School Carpool Cluster (Zero Gate Idling)</option>
+            <option value="DIY Air Cleaners">Built DIY Corsi-Rosenthal Air Cleaners</option>
+            <option value="Clean Heating Switch">Switched to Inverter Heat Pump / Non-Combustion</option>
+            <option value="Anti-Burning Watch">Anti-Open Burning Neighborhood Watch</option>
+            <option value="Window Draft Sealing">Thermal Sealing & Inversion Window Timing</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Action Description</label>
+          <textarea id="pledge-action" rows="3" placeholder="Describe the specific action your family or community is taking..." class="w-full glass-input rounded-lg px-3 py-2"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closePledgeModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">Cancel</button>
+        <button onclick="submitPledgeForm()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white">Commit Pledge</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Incident Modal -->
+  <div id="modal-incident" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl max-w-md w-full p-6 border-rose-700/60 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+          <span>🚨</span> Report Smog Violation or Open Burning
+        </h3>
+        <button onclick="closeIncidentModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Violation Type</label>
+          <select id="inc-type" class="w-full glass-input rounded-lg px-3 py-2">
+            <option value="Horticultural / Leaf Open Burning">Horticultural / Leaf Open Burning</option>
+            <option value="Municipal Solid Waste / Plastic Fire">Municipal Solid Waste / Plastic Fire</option>
+            <option value="Commercial Diesel Generator Continuous Idling">Commercial Diesel Generator Continuous Idling</option>
+            <option value="Uncovered Construction Dust Violation">Uncovered Construction Dust Violation</option>
+            <option value="Industrial Smog Stack Bypass">Industrial Smog Stack Bypass</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Exact Location / Landmark</label>
+          <input type="text" id="inc-loc" placeholder="e.g. Ring Road service lane near Flyover Pillar 42" class="w-full glass-input rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Severity</label>
+          <select id="inc-severity" class="w-full glass-input rounded-lg px-3 py-2">
+            <option value="Critical (Direct Highway / School Hazard)">Critical (Direct Highway / School Hazard)</option>
+            <option value="High (Dense black smoke drifting into residential area)" selected>High (Dense black smoke into residential area)</option>
+            <option value="Moderate (Continuous localized smolder)">Moderate (Continuous localized smolder)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Details & Evidence Description</label>
+          <textarea id="inc-details" rows="3" placeholder="Describe the plume, approximate size, and time started..." class="w-full glass-input rounded-lg px-3 py-2"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeIncidentModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">Cancel</button>
+        <button onclick="submitIncidentForm()" class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 font-bold text-xs text-white">Transmit Report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-4 px-4 sm:px-8 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+      <div>AuraShield AI &copy; 2026. Empowering communities to breathe cleaner through physics, GenAI, and collective action.</div>
+      <div class="flex gap-4 text-slate-400">
+        <span>WHO PM2.5 Benchmark: 15 µg/m³ 24h</span>
+        <span>•</span>
+        <span>1 Cigarette ≈ 22 µg/m³ 24h</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
