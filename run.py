@@ -3,6 +3,7 @@ AuraShield AI: Winter Smog & Urban Air Pollution Navigator
 Application Runner Script
 """
 
+import os
 import sys
 import socket
 import webbrowser
@@ -21,22 +22,29 @@ def find_available_port(start_port: int = 8000, max_attempts: int = 20) -> int:
     return start_port
 
 if __name__ == "__main__":
-    port = find_available_port(8000)
-    url = f"http://127.0.0.1:{port}"
+    env_port = os.environ.get("PORT")
+    if env_port:
+        port = int(env_port)
+        host = "0.0.0.0"
+    else:
+        port = find_available_port(8000)
+        host = "127.0.0.1"
+
+    url = f"http://{host}:{port}"
 
     print("=" * 70)
     print("🛡️  AuraShield AI: Winter Smog & Urban Air Pollution Navigator")
     print("=" * 70)
-    print(f"🚀 Starting server on: {url}")
+    print(f"🚀 Starting server on: {url} (host: {host}, port: {port})")
     print(f"📡 Access the web dashboard at: {url}")
     print("💡 Press Ctrl+C to stop the server.")
     print("=" * 70)
 
-    # Optional: open browser automatically if interactive
-    if "--no-browser" not in sys.argv:
+    # Optional: open browser automatically if local interactive session
+    if not env_port and "--no-browser" not in sys.argv:
         try:
-            webbrowser.open(url)
+            webbrowser.open(f"http://127.0.0.1:{port}")
         except Exception:
             pass
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False, log_level="info")
+    uvicorn.run("app.main:app", host=host, port=port, reload=False, log_level="info")

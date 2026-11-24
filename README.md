@@ -94,7 +94,27 @@ $$\text{Time to 90\% Clearance (minutes)} = \left( \frac{2.3026}{\text{ACH}} \ri
 
 ---
 
-## 🚀 Quickstart Guide
+## 🚀 Quickstart & Deployment
+
+### Deploy on Render (Free & 1-Click)
+This project is pre-configured with `render.yaml`, `Procfile`, and `requirements.txt` for instant deployment on [Render](https://render.com):
+
+1. **Log in** to your [Render Dashboard](https://dashboard.render.com).
+2. Click **New +** $\rightarrow$ **Web Service**.
+3. Connect your GitHub repository: `https://github.com/RiyaSinghal26/Urban-Air-Quality-Assistant`.
+4. Configure the settings:
+   - **Name**: `urban-air-quality-assistant` (or your choice)
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Instance Type**: `Free`
+5. (Optional) Under **Environment Variables**, add:
+   - `GEMINI_API_KEY`: *(Your Google Gemini API Key if you want live Google AI reasoning; otherwise built-in offline GenAI engine will run automatically)*
+6. Click **Deploy Web Service**! Render will build and launch your live application at `https://urban-air-quality-assistant.onrender.com`.
+
+---
+
+### Local Quickstart Guide
 
 ### Prerequisites
 - Python 3.10+ (tested on Python 3.13)
